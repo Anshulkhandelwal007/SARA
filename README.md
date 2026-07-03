@@ -102,6 +102,244 @@ To stop and remove all containers, networks, and volumes (⚠️ **deletes all d
 docker-compose down -v
 ```
 
+---
+
+# Deploy SARA
+
+## One-Command Deployment
+
+Deploy the entire SARA stack from scratch with a single command:
+
+```bash
+./scripts/deploy-all.sh
+```
+
+This script will:
+- Verify Docker is running
+- Check Git state
+- Start all Docker services
+- Wait for services to be healthy
+- Import n8n workflows from `workflows/exports/`
+- Verify deployment
+- Print service URLs
+
+## Verification
+
+After deployment, verify everything is working:
+
+```bash
+./scripts/verify-deployment.sh
+```
+
+This script checks:
+- Docker and Docker Compose
+- All containers running
+- Backend health
+- PostgreSQL connectivity
+- n8n health
+- Workflow count and names
+- Architecture compliance
+- Repository synchronization
+
+## Prerequisites
+
+- **Docker Desktop** (Mac/Windows) or Docker Engine (Linux)
+- **Docker Compose**
+- **Git**
+- **Bash shell**
+- **4GB RAM** minimum
+- **10GB disk space** minimum
+
+## Deployment Steps
+
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/Anshulkhandelwal007/SARA.git
+cd SARA
+```
+
+### 2. Configure Environment
+
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+**Important**: Change all default passwords in production.
+
+### 3. Deploy
+
+```bash
+./scripts/deploy-all.sh
+```
+
+### 4. Verify
+
+```bash
+./scripts/verify-deployment.sh
+```
+
+## Service URLs
+
+After deployment, access services at:
+
+- **Backend API**: http://localhost:8000
+- **Backend Health**: http://localhost:8000/health
+- **Backend Docs (Swagger)**: http://localhost:8000/docs
+- **Backend Docs (ReDoc)**: http://localhost:8000/redoc
+- **n8n UI**: http://localhost:5678
+- **n8n Health**: http://localhost:5678/healthz
+- **pgAdmin**: http://localhost:5050
+
+## Updating Workflows
+
+To update n8n workflows:
+
+1. Update workflow JSON in `workflows/exports/`
+2. Copy to n8n container:
+   ```bash
+   docker cp workflows/exports/workflow-name.json sara-n8n:/tmp/
+   ```
+3. Import workflow:
+   ```bash
+   docker exec sara-n8n n8n import:workflow --input=/tmp/workflow-name.json
+   ```
+4. Restart n8n:
+   ```bash
+   docker-compose restart n8n
+   ```
+
+## Restarting Services
+
+### Restart All Services
+
+```bash
+docker-compose restart
+```
+
+### Restart Specific Service
+
+```bash
+docker-compose restart backend
+docker-compose restart n8n
+docker-compose restart postgres
+```
+
+### Stop All Services
+
+```bash
+docker-compose down
+```
+
+### Start All Services
+
+```bash
+docker-compose up -d
+```
+
+## Recovery After Reboot
+
+If your Mac restarts or Docker stops:
+
+1. **Start Docker Desktop**
+2. **Start SARA services**:
+   ```bash
+   cd /path/to/SARA
+   docker-compose up -d
+   ```
+3. **Verify deployment**:
+   ```bash
+   ./scripts/verify-deployment.sh
+   ```
+
+If workflows are missing after reboot:
+```bash
+# Re-import workflows
+./scripts/deploy-all.sh
+```
+
+## Common Troubleshooting
+
+### Port Already in Use
+
+```bash
+# Check what's using the port
+lsof -i :5432
+lsof -i :5678
+lsof -i :8000
+lsof -i :5050
+
+# Change port in .env or stop conflicting service
+```
+
+### Container Won't Start
+
+```bash
+# Check logs
+docker logs sara-backend
+docker logs sara-n8n
+docker logs sara-postgres
+
+# Rebuild backend if needed
+docker-compose build backend
+docker-compose up -d backend
+```
+
+### Database Connection Failed
+
+```bash
+# Verify PostgreSQL is running
+docker ps | grep postgres
+
+# Check PostgreSQL logs
+docker logs sara-postgres
+
+# Verify environment variables in .env
+```
+
+### n8n Workflows Not Loading
+
+```bash
+# Check n8n logs
+docker logs sara-n8n
+
+# Manually re-import workflows
+for workflow in workflows/exports/*.json; do
+    docker cp "$workflow" sara-n8n:/tmp/
+    docker exec sara-n8n n8n import:workflow --input=/tmp/$(basename "$workflow")
+done
+
+# Restart n8n
+docker-compose restart n8n
+```
+
+### Disk Space Issues
+
+```bash
+# Check Docker disk usage
+docker system df
+
+# Clean up unused containers
+docker container prune
+
+# Clean up unused images
+docker image prune
+
+# Clean up unused volumes
+docker volume prune
+```
+
+## Detailed Documentation
+
+For more detailed information, see:
+
+- **[Deployment Guide](docs/deployment.md)** - Complete deployment documentation
+- **[Operating Guide](docs/operating-guide.md)** - Day-to-day operations
+- **[Disaster Recovery](docs/disaster-recovery.md)** - Backup and recovery procedures
+- **[Runbook](docs/runbook.md)** - Step-by-step operational procedures
+- **[Architecture Documentation](docs/architecture.md)** - System design and architecture
+
 ## Project Structure
 
 ```

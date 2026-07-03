@@ -1,0 +1,462 @@
+{
+  "name": "Google Workspace Initialization",
+  "id": "google-workspace-initialization",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Start Initialization",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "search": "name:SARA CRM",
+        "options": {}
+      },
+      "id": "check-folder-exists",
+      "name": "Check if SARA CRM Folder Exists",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if SARA CRM folder exists\nconst items = $input.all();\nconst folderExists = items.length > 0 && items[0].json.name === 'SARA CRM';\n\nif (folderExists) {\n  return [{\n    json: {\n      folderExists: true,\n      folderId: items[0].json.id,\n      folderName: items[0].json.name\n    }\n  }];\n} else {\n  return [{\n    json: {\n      folderExists: false,\n      folderId: null,\n      folderName: 'SARA CRM'\n    }\n  }];\n}"
+      },
+      "id": "evaluate-folder-existence",
+      "name": "Evaluate Folder Existence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "folder-exists-condition",
+              "leftValue": "={{ $json.folderExists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-folder-exists",
+      "name": "If Folder Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "name": "SARA CRM",
+        "mimeType": "application/vnd.google-apps.folder",
+        "options": {}
+      },
+      "id": "create-folder",
+      "name": "Create SARA CRM Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [1120, 200],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Set folder ID from either existing or newly created folder\nconst folderData = $input.all();\nconst folderId = folderData[0].json.folderId || folderData[0].json.id;\n\nreturn [{\n  json: {\n    folderId: folderId,\n    folderName: 'SARA CRM'\n  }\n}];"
+      },
+      "id": "set-folder-id",
+      "name": "Set Folder ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "search": "name:Lead Master",
+        "folderId": "={{ $json.folderId }}",
+        "options": {}
+      },
+      "id": "check-spreadsheet-exists",
+      "name": "Check if Lead Master Exists",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [1560, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if Lead Master spreadsheet exists\nconst items = $input.all();\nconst spreadsheetExists = items.length > 0 && items[0].json.name === 'Lead Master';\n\nif (spreadsheetExists) {\n  return [{\n    json: {\n      spreadsheetExists: true,\n      spreadsheetId: items[0].json.id,\n      spreadsheetName: items[0].json.name,\n      folderId: $('Set Folder ID').first().json.folderId\n    }\n  }];\n} else {\n  return [{\n    json: {\n      spreadsheetExists: false,\n      spreadsheetId: null,\n      spreadsheetName: 'Lead Master',\n      folderId: $('Set Folder ID').first().json.folderId\n    }\n  }];\n}"
+      },
+      "id": "evaluate-spreadsheet-existence",
+      "name": "Evaluate Spreadsheet Existence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "spreadsheet-exists-condition",
+              "leftValue": "={{ $json.spreadsheetExists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-spreadsheet-exists",
+      "name": "If Spreadsheet Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "name": "Lead Master",
+        "mimeType": "application/vnd.google-apps.spreadsheet",
+        "parents": [
+          "={{ $json.folderId }}"
+        ],
+        "options": {}
+      },
+      "id": "create-spreadsheet",
+      "name": "Create Lead Master Spreadsheet",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 2,
+      "position": [2220, 200],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "add",
+        "sheetId": {
+          "__rl": true,
+          "value": "",
+          "mode": "url",
+          "name": "Google Sheets"
+        },
+        "options": {}
+      },
+      "id": "add-active-leads-tab",
+      "name": "Add Active Leads Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2440, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "add",
+        "sheetId": {
+          "__rl": true,
+          "value": "",
+          "mode": "url",
+          "name": "Google Sheets"
+        },
+        "options": {}
+      },
+      "id": "add-archived-leads-tab",
+      "name": "Add Archived Leads Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2660, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "add",
+        "sheetId": {
+          "__rl": true,
+          "value": "",
+          "mode": "url",
+          "name": "Google Sheets"
+        },
+        "options": {}
+      },
+      "id": "add-followup-log-tab",
+      "name": "Add Follow-up Log Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2880, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "sheetId": {
+          "__rl": true,
+          "value": "",
+          "mode": "url",
+          "name": "Google Sheets"
+        },
+        "range": "A1:Z1",
+        "options": {}
+      },
+      "id": "populate-active-leads-headers",
+      "name": "Populate Active Leads Headers",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [3100, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Set spreadsheet ID and prepare final result\nconst spreadsheetData = $input.all();\nconst spreadsheetId = spreadsheetData[0].json.spreadsheetId || spreadsheetData[0].json.id;\nconst folderId = spreadsheetData[0].json.folderId;\n\nreturn [{\n  json: {\n    success: true,\n    message: 'Google Workspace initialization completed successfully',\n    folderId: folderId,\n    folderName: 'SARA CRM',\n    spreadsheetId: spreadsheetId,\n    spreadsheetName: 'Lead Master',\n    tabs: ['Active Leads', 'Archived Leads', 'Follow-up Log'],\n    initialized: true\n  }\n}];"
+      },
+      "id": "prepare-final-result",
+      "name": "Prepare Final Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 300]
+    }
+  ],
+  "connections": {
+    "Start Initialization": {
+      "main": [
+        [
+          {
+            "node": "Check if SARA CRM Folder Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if SARA CRM Folder Exists": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Folder Existence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Folder Existence": {
+      "main": [
+        [
+          {
+            "node": "If Folder Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Folder Exists": {
+      "main": [
+        [
+          {
+            "node": "Set Folder ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create SARA CRM Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create SARA CRM Folder": {
+      "main": [
+        [
+          {
+            "node": "Set Folder ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Folder ID": {
+      "main": [
+        [
+          {
+            "node": "Check if Lead Master Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Lead Master Exists": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Spreadsheet Existence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Spreadsheet Existence": {
+      "main": [
+        [
+          {
+            "node": "If Spreadsheet Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Spreadsheet Exists": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Lead Master Spreadsheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Lead Master Spreadsheet": {
+      "main": [
+        [
+          {
+            "node": "Add Active Leads Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Active Leads Tab": {
+      "main": [
+        [
+          {
+            "node": "Add Archived Leads Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Archived Leads Tab": {
+      "main": [
+        [
+          {
+            "node": "Add Follow-up Log Tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Follow-up Log Tab": {
+      "main": [
+        [
+          {
+            "node": "Populate Active Leads Headers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Populate Active Leads Headers": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-03T12:00:00.000Z",
+  "versionId": "1"
+}
