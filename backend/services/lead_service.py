@@ -3,9 +3,9 @@ from models.company import Company
 from models.contact import Contact
 from models.lead import Lead
 from schemas.lead import LeadImportRequest, LeadImportResponse, LeadScoreResponse, NextActionResponse, CallSummaryResponse, FollowupDecisionResponse
-from schemas.response import ImportLeadRequest, ImportLeadResponse, BatchImportResponse, ActivityLogRequest
+from schemas.response import ImportLeadRequest, ImportLeadResponse, BatchImportResponse, ActivityLogRequest, PriorityScoreResponse, FollowupLead, FollowupsDueResponse, TimelineEvent, TimelineResponse
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import re
 
@@ -477,5 +477,259 @@ class LeadService:
             should_followup=True,
             channel="email",
             timing="2_days",
-            reason="Positive engagement detected, follow up recommended"
+            reason="Lead showed positive engagement",
+            suggested_message="Following up on our previous conversation..."
+        )
+    
+    def calculate_priority_score(self, lead_id: str) -> PriorityScoreResponse:
+        """Calculate priority score for a lead based on multiple factors."""
+        lead = self.db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            raise ValueError(f"Lead {lead_id} not found")
+        
+        # Get contact and company info
+        contact = self.db.query(Contact).filter(Contact.id == lead.contact_id).first()
+        company = self.db.query(Company).filter(Company.id == lead.company_id).first() if lead.company_id else None
+        
+        # Scoring factors (simple, explainable logic)
+        factors = {
+            "status_score": 0,
+            "recency_score": 0,
+            "value_score": 0,
+            "interaction_score": 0,
+            "overdue_score": 0
+        }
+        
+        # Status score (30 points max)
+        status_weights = {
+            "new": 10,
+            "contacted": 20,
+            "engaged": 30,
+            "qualified": 35,
+            "opportunity": 40,
+            "customer": 50,
+            "lost": 0,
+            "churned": 0
+        }
+        factors["status_score"] = status_weights.get(lead.status, 10)
+        
+        # Recency score (25 points max) - based on last contact
+        if lead.last_contacted_at:
+            days_since_contact = (datetime.utcnow() - lead.last_contacted_at).days
+            if days_since_contact <= 1:
+                factors["recency_score"] = 25
+            elif days_since_contact <= 3:
+                factors["recency_score"] = 20
+            elif days_since_contact <= 7:
+                factors["recency_score"] = 15
+            elif days_since_contact <= 14:
+                factors["recency_score"] = 10
+            else:
+                factors["recency_score"] = 5
+        else:
+            factors["recency_score"] = 5
+        
+        # Value score (20 points max) - based on estimated value
+        if lead.estimated_value:
+            value = float(lead.estimated_value)
+            if value >= 100000:
+                factors["value_score"] = 20
+            elif value >= 50000:
+                factors["value_score"] = 15
+            elif value >= 25000:
+                factors["value_score"] = 10
+            elif value >= 10000:
+                factors["value_score"] = 5
+            else:
+                factors["value_score"] = 2
+        else:
+            factors["value_score"] = 0
+        
+        # Interaction score (15 points max) - based on interaction count
+        if lead.interaction_count:
+            if lead.interaction_count >= 5:
+                factors["interaction_score"] = 15
+            elif lead.interaction_count >= 3:
+                factors["interaction_score"] = 10
+            elif lead.interaction_count >= 1:
+                factors["interaction_score"] = 5
+            else:
+                factors["interaction_score"] = 0
+        else:
+            factors["interaction_score"] = 0
+        
+        # Overdue score (10 points max) - based on follow-up due date
+        if lead.next_followup_at:
+            days_overdue = (datetime.utcnow() - lead.next_followup_at).days
+            if days_overdue > 0:
+                factors["overdue_score"] = min(10, days_overdue * 2)  # 2 points per day overdue, max 10
+            else:
+                factors["overdue_score"] = 0
+        else:
+            factors["overdue_score"] = 0
+        
+        # Calculate total score
+        total_score = sum(factors.values())
+        
+        # Determine label
+        if total_score >= 70:
+            label = "Hot"
+        elif total_score >= 50:
+            label = "Warm"
+        elif total_score >= 30:
+            label = "Cold"
+        else:
+            label = "Cold"
+        
+        # Override label if overdue
+        if lead.next_followup_at and (datetime.utcnow() - lead.next_followup_at).days > 0:
+            label = "Overdue"
+        
+        # Generate reason
+        reasons = []
+        if factors["status_score"] >= 30:
+            reasons.append("high status")
+        if factors["recency_score"] >= 20:
+            reasons.append("recent contact")
+        if factors["value_score"] >= 15:
+            reasons.append("high value")
+        if factors["interaction_score"] >= 10:
+            reasons.append("engaged")
+        if factors["overdue_score"] > 0:
+            reasons.append("overdue follow-up")
+        
+        reason = ", ".join(reasons) if reasons else "standard priority"
+        
+        # Recommend next action
+        if label == "Hot" or label == "Overdue":
+            next_action = "Call immediately"
+        elif label == "Warm":
+            next_action = "Send email within 24 hours"
+        else:
+            next_action = "Schedule follow-up for next week"
+        
+        return PriorityScoreResponse(
+            lead_id=lead_id,
+            score=min(100, total_score),
+            label=label,
+            reason=reason,
+            next_action=next_action,
+            factors=factors
+        )
+    
+    def get_followups_due(self, days_ahead: int = 7) -> FollowupsDueResponse:
+        """Get leads with due or overdue follow-ups, sorted by urgency."""
+        now = datetime.utcnow()
+        end_date = now + timedelta(days=days_ahead)
+        
+        # Query leads with follow-ups due
+        leads = self.db.query(Lead).filter(
+            Lead.next_followup_at.isnot(None),
+            Lead.next_followup_at <= end_date
+        ).order_by(Lead.next_followup_at.asc()).all()
+        
+        followup_leads = []
+        overdue_count = 0
+        due_today_count = 0
+        due_this_week_count = 0
+        
+        for lead in leads:
+            # Get contact and company info
+            contact = self.db.query(Contact).filter(Contact.id == lead.contact_id).first()
+            company = self.db.query(Company).filter(Company.id == lead.company_id).first() if lead.company_id else None
+            
+            # Calculate days overdue
+            days_overdue = (now - lead.next_followup_at).days
+            
+            # Calculate priority score
+            priority_response = self.calculate_priority_score(lead.id)
+            
+            # Count categories
+            if days_overdue > 0:
+                overdue_count += 1
+            if days_overdue == 0:
+                due_today_count += 1
+            if days_overdue >= -7:
+                due_this_week_count += 1
+            
+            followup_lead = FollowupLead(
+                lead_id=lead.id,
+                contact_name=f"{contact.first_name} {contact.last_name}" if contact else "Unknown",
+                company_name=company.name if company else "Unknown",
+                next_followup_at=lead.next_followup_at.isoformat() if lead.next_followup_at else None,
+                days_overdue=days_overdue,
+                priority_score=priority_response.score,
+                priority_label=priority_response.label,
+                last_contacted_at=lead.last_contacted_at.isoformat() if lead.last_contacted_at else None,
+                status=lead.status
+            )
+            followup_leads.append(followup_lead)
+        
+        return FollowupsDueResponse(
+            total_leads=len(followup_leads),
+            overdue_count=overdue_count,
+            due_today_count=due_today_count,
+            due_this_week_count=due_this_week_count,
+            leads=followup_leads
+        )
+    
+    def get_lead_timeline(self, lead_id: str) -> TimelineResponse:
+        """Get timeline of events for a lead."""
+        lead = self.db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            raise ValueError(f"Lead {lead_id} not found")
+        
+        # Get contact and company info
+        contact = self.db.query(Contact).filter(Contact.id == lead.contact_id).first()
+        company = self.db.query(Company).filter(Company.id == lead.company_id).first() if lead.company_id else None
+        
+        events = []
+        
+        # Lead creation event
+        events.append(TimelineEvent(
+            event_type="created",
+            description="Lead created",
+            timestamp=lead.created_at.isoformat() if lead.created_at else None,
+            actor="system",
+            details={"source": lead.source}
+        ))
+        
+        # Last contact event
+        if lead.last_contacted_at:
+            events.append(TimelineEvent(
+                event_type="contact",
+                description="Last contact made",
+                timestamp=lead.last_contacted_at.isoformat(),
+                actor="system",
+                details={"interaction_count": lead.interaction_count}
+            ))
+        
+        # Next follow-up event
+        if lead.next_followup_at:
+            events.append(TimelineEvent(
+                event_type="scheduled",
+                description="Follow-up scheduled",
+                timestamp=lead.next_followup_at.isoformat(),
+                actor="system",
+                details={"status": lead.status}
+            ))
+        
+        # Status change event (if status is not new)
+        if lead.status != "new":
+            events.append(TimelineEvent(
+                event_type="status_change",
+                description=f"Status changed to {lead.status}",
+                timestamp=lead.updated_at.isoformat() if lead.updated_at else None,
+                actor="system",
+                details={"status": lead.status}
+            ))
+        
+        # Sort events by timestamp
+        events.sort(key=lambda x: x.timestamp if x.timestamp else "")
+        
+        return TimelineResponse(
+            lead_id=lead_id,
+            contact_name=f"{contact.first_name} {contact.last_name}" if contact else "Unknown",
+            company_name=company.name if company else "Unknown",
+            events=events
         )

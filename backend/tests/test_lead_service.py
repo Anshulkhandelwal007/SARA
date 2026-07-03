@@ -457,3 +457,329 @@ class TestResponseFormat:
         assert response.status == "healthy"
         assert response.database == "connected"
         assert response.timestamp == "2026-07-03T00:00:00Z"
+
+
+class TestPriorityScoring:
+    """Test lead priority scoring logic."""
+    
+    def test_priority_score_hot_lead(self, db_session: Session):
+        """Test scoring for a hot lead."""
+        from services.lead_service import LeadService
+        from datetime import datetime, timedelta
+        
+        service = LeadService(db_session)
+        
+        # Create a hot lead
+        lead_data = ImportLeadRequest(
+            company_name="Hot Company",
+            first_name="John",
+            last_name="Doe",
+            email="john@hotcompany.com",
+            source="referral",
+            estimated_value=100000.0,
+            status="qualified"
+        )
+        
+        result = service.import_lead_new(lead_data)
+        lead_id = result.lead_id
+        
+        # Update lead to make it hot
+        lead = db_session.query(Lead).filter(Lead.id == lead_id).first()
+        lead.last_contacted_at = datetime.utcnow() - timedelta(days=1)
+        lead.next_followup_at = datetime.utcnow() - timedelta(days=1)  # Overdue
+        lead.interaction_count = 5
+        db_session.commit()
+        
+        # Calculate priority score
+        priority = service.calculate_priority_score(lead_id)
+        
+        assert priority.score >= 70
+        assert priority.label in ["Hot", "Overdue"]
+        assert "overdue follow-up" in priority.reason or "high status" in priority.reason
+        assert priority.next_action == "Call immediately"
+    
+    def test_priority_score_warm_lead(self, db_session: Session):
+        """Test scoring for a warm lead."""
+        from services.lead_service import LeadService
+        from datetime import datetime, timedelta
+        
+        service = LeadService(db_session)
+        
+        # Create a warm lead
+        lead_data = ImportLeadRequest(
+            company_name="Warm Company",
+            first_name="Jane",
+            last_name="Smith",
+            email="jane@warmcompany.com",
+            source="web_form",
+            estimated_value=50000.0,
+            status="contacted"
+        )
+        
+        result = service.import_lead_new(lead_data)
+        lead_id = result.lead_id
+        
+        # Update lead to make it warm
+        lead = db_session.query(Lead).filter(Lead.id == lead_id).first()
+        lead.last_contacted_at = datetime.utcnow() - timedelta(days=3)
+        lead.next_followup_at = datetime.utcnow() + timedelta(days=2)
+        lead.interaction_count = 2
+        db_session.commit()
+        
+        # Calculate priority score
+        priority = service.calculate_priority_score(lead_id)
+        
+        assert 50 <= priority.score < 70
+        assert priority.label == "Warm"
+        assert priority.next_action == "Send email within 24 hours"
+    
+    def test_priority_score_cold_lead(self, db_session: Session):
+        """Test scoring for a cold lead."""
+        from services.lead_service import LeadService
+        from datetime import datetime, timedelta
+        
+        service = LeadService(db_session)
+        
+        # Create a cold lead
+        lead_data = ImportLeadRequest(
+            company_name="Cold Company",
+            first_name="Bob",
+            last_name="Johnson",
+            email="bob@coldcompany.com",
+            source="api",
+            estimated_value=5000.0,
+            status="new"
+        )
+        
+        result = service.import_lead_new(lead_data)
+        lead_id = result.lead_id
+        
+        # Update lead to make it cold
+        lead = db_session.query(Lead).filter(Lead.id == lead_id).first()
+        lead.last_contacted_at = datetime.utcnow() - timedelta(days=30)
+        lead.interaction_count = 0
+        db_session.commit()
+        
+        # Calculate priority score
+        priority = service.calculate_priority_score(lead_id)
+        
+        assert priority.score < 50
+        assert priority.label == "Cold"
+        assert priority.next_action == "Schedule follow-up for next week"
+    
+    def test_priority_score_factors_breakdown(self, db_session: Session):
+        """Test that priority score factors are correctly calculated."""
+        from services.lead_service import LeadService
+        from datetime import datetime, timedelta
+        
+        service = LeadService(db_session)
+        
+        # Create a lead
+        lead_data = ImportLeadRequest(
+            company_name="Test Company",
+            first_name="Test",
+            last_name="User",
+            email="test@testcompany.com",
+            source="manual",
+            estimated_value=75000.0,
+            status="engaged"
+        )
+        
+        result = service.import_lead_new(lead_data)
+        lead_id = result.lead_id
+        
+        # Update lead
+        lead = db_session.query(Lead).filter(Lead.id == lead_id).first()
+        lead.last_contacted_at = datetime.utcnow() - timedelta(days=2)
+        lead.next_followup_at = datetime.utcnow() - timedelta(days=1)
+        lead.interaction_count = 3
+        db_session.commit()
+        
+        # Calculate priority score
+        priority = service.calculate_priority_score(lead_id)
+        
+        # Verify factors exist
+        assert "status_score" in priority.factors
+        assert "recency_score" in priority.factors
+        assert "value_score" in priority.factors
+        assert "interaction_score" in priority.factors
+        assert "overdue_score" in priority.factors
+        
+        # Verify factor ranges
+        assert 0 <= priority.factors["status_score"] <= 50
+        assert 0 <= priority.factors["recency_score"] <= 25
+        assert 0 <= priority.factors["value_score"] <= 20
+        assert 0 <= priority.factors["interaction_score"] <= 15
+        assert 0 <= priority.factors["overdue_score"] <= 10
+
+
+class TestFollowupReminders:
+    """Test follow-up reminder logic."""
+    
+    def test_followups_due_overdue_detection(self, db_session: Session):
+        """Test detection of overdue follow-ups."""
+        from services.lead_service import LeadService
+        from datetime import datetime, timedelta
+        
+        service = LeadService(db_session)
+        
+        # Create a lead with overdue follow-up
+        lead_data = ImportLeadRequest(
+            company_name="Overdue Company",
+            first_name="Overdue",
+            last_name="User",
+            email="overdue@overduecompany.com",
+            source="manual",
+            status="qualified"
+        )
+        
+        result = service.import_lead_new(lead_data)
+        lead_id = result.lead_id
+        
+        # Set follow-up to yesterday
+        lead = db_session.query(Lead).filter(Lead.id == lead_id).first()
+        lead.next_followup_at = datetime.utcnow() - timedelta(days=1)
+        db_session.commit()
+        
+        # Get follow-ups due
+        followups = service.get_followups_due(days_ahead=7)
+        
+        assert followups.total_leads >= 1
+        assert followups.overdue_count >= 1
+        
+        # Find our lead
+        our_lead = next((l for l in followups.leads if l.lead_id == lead_id), None)
+        assert our_lead is not None
+        assert our_lead.days_overdue == 1
+    
+    def test_followups_due_today(self, db_session: Session):
+        """Test detection of follow-ups due today."""
+        from services.lead_service import LeadService
+        from datetime import datetime
+        
+        service = LeadService(db_session)
+        
+        # Create a lead with follow-up due today
+        lead_data = ImportLeadRequest(
+            company_name="Today Company",
+            first_name="Today",
+            last_name="User",
+            email="today@todaycompany.com",
+            source="manual",
+            status="contacted"
+        )
+        
+        result = service.import_lead_new(lead_data)
+        lead_id = result.lead_id
+        
+        # Set follow-up to today
+        lead = db_session.query(Lead).filter(Lead.id == lead_id).first()
+        lead.next_followup_at = datetime.utcnow()
+        db_session.commit()
+        
+        # Get follow-ups due
+        followups = service.get_followups_due(days_ahead=7)
+        
+        assert followups.due_today_count >= 1
+    
+    def test_followups_ordering_by_urgency(self, db_session: Session):
+        """Test that follow-ups are ordered by urgency (most overdue first)."""
+        from services.lead_service import LeadService
+        from datetime import datetime, timedelta
+        
+        service = LeadService(db_session)
+        
+        # Create multiple leads with different overdue days
+        lead_ids = []
+        for days_overdue in [5, 2, 1, 0, -1]:  # 5 days overdue, 2 days overdue, 1 day overdue, today, tomorrow
+            lead_data = ImportLeadRequest(
+                company_name=f"Company {days_overdue}",
+                first_name=f"User {days_overdue}",
+                last_name="Test",
+                email=f"user{days_overdue}@test.com",
+                source="manual",
+                status="new"
+            )
+            
+            result = service.import_lead_new(lead_data)
+            lead_id = result.lead_id
+            lead_ids.append(lead_id)
+            
+            lead = db_session.query(Lead).filter(Lead.id == lead_id).first()
+            lead.next_followup_at = datetime.utcnow() - timedelta(days=days_overdue)
+            db_session.commit()
+        
+        # Get follow-ups due
+        followups = service.get_followups_due(days_ahead=7)
+        
+        # Verify ordering (most overdue first)
+        if len(followups.leads) >= 2:
+            for i in range(len(followups.leads) - 1):
+                assert followups.leads[i].days_overdue >= followups.leads[i + 1].days_overdue
+
+
+class TestTimeline:
+    """Test lead timeline functionality."""
+    
+    def test_timeline_basic(self, db_session: Session):
+        """Test basic timeline generation."""
+        from services.lead_service import LeadService
+        
+        service = LeadService(db_session)
+        
+        # Create a lead
+        lead_data = ImportLeadRequest(
+            company_name="Timeline Company",
+            first_name="Timeline",
+            last_name="User",
+            email="timeline@timelinecompany.com",
+            source="manual",
+            status="new"
+        )
+        
+        result = service.import_lead_new(lead_data)
+        lead_id = result.lead_id
+        
+        # Get timeline
+        timeline = service.get_lead_timeline(lead_id)
+        
+        assert timeline.lead_id == lead_id
+        assert timeline.contact_name == "Timeline User"
+        assert timeline.company_name == "Timeline Company"
+        assert len(timeline.events) > 0
+        
+        # Verify creation event exists
+        creation_event = next((e for e in timeline.events if e.event_type == "created"), None)
+        assert creation_event is not None
+    
+    def test_timeline_with_status_change(self, db_session: Session):
+        """Test timeline with status change."""
+        from services.lead_service import LeadService
+        
+        service = LeadService(db_session)
+        
+        # Create a lead
+        lead_data = ImportLeadRequest(
+            company_name="Status Company",
+            first_name="Status",
+            last_name="User",
+            email="status@statuscompany.com",
+            source="manual",
+            status="new"
+        )
+        
+        result = service.import_lead_new(lead_data)
+        lead_id = result.lead_id
+        
+        # Update status
+        lead = db_session.query(Lead).filter(Lead.id == lead_id).first()
+        lead.status = "contacted"
+        db_session.commit()
+        
+        # Get timeline
+        timeline = service.get_lead_timeline(lead_id)
+        
+        # Verify status change event exists
+        status_event = next((e for e in timeline.events if e.event_type == "status_change"), None)
+        assert status_event is not None
+        assert "contacted" in status_event.description

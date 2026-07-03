@@ -460,6 +460,10 @@ Lead → Contact → Opportunity → Quotation → Order → Invoice → Payment
 - **Batch import endpoint** (Sprint 1)
 - **Activity logging endpoint** (Sprint 1)
 - **Standard API response wrapper** (Sprint 1)
+- **Lead priority scoring engine** (Sprint 2)
+- **Follow-up reminder system** (Sprint 2)
+- **Lead timeline endpoint** (Sprint 2)
+- **Daily follow-up summary API** (Sprint 2)
 
 #### Google Sheets (Import/Export Interface Only)
 - Used for bulk data import (leads, contacts)

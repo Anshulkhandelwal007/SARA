@@ -150,3 +150,116 @@ class ActivityLogRequest(BaseModel):
                 "details": {"source": "google_sheets"}
             }
         }
+
+
+class PriorityScoreResponse(BaseModel):
+    """Response for lead priority score."""
+    lead_id: str = Field(..., description="Lead ID")
+    score: int = Field(..., description="Priority score (0-100)")
+    label: str = Field(..., description="Priority label (Hot/Warm/Cold/Overdue)")
+    reason: str = Field(..., description="Reason for the score")
+    next_action: str = Field(..., description="Recommended next action")
+    factors: dict = Field(..., description="Scoring factors breakdown")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "lead_id": "123e4567-e89b-12d3-a456-426614174000",
+                "score": 85,
+                "label": "Hot",
+                "reason": "High value lead with overdue follow-up",
+                "next_action": "Call immediately",
+                "factors": {
+                    "status_score": 30,
+                    "recency_score": 25,
+                    "value_score": 20,
+                    "interaction_score": 10
+                }
+            }
+        }
+
+
+class FollowupLead(BaseModel):
+    """Lead with follow-up information."""
+    lead_id: str = Field(..., description="Lead ID")
+    contact_name: str = Field(..., description="Contact name")
+    company_name: str = Field(..., description="Company name")
+    next_followup_at: str = Field(..., description="Scheduled follow-up time")
+    days_overdue: int = Field(..., description="Days overdue (negative if not overdue)")
+    priority_score: int = Field(..., description="Priority score")
+    priority_label: str = Field(..., description="Priority label")
+    last_contacted_at: Optional[str] = Field(None, description="Last contact time")
+    status: str = Field(..., description="Lead status")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "lead_id": "123e4567-e89b-12d3-a456-426614174000",
+                "contact_name": "John Doe",
+                "company_name": "Acme Corp",
+                "next_followup_at": "2026-07-01T10:00:00Z",
+                "days_overdue": 2,
+                "priority_score": 85,
+                "priority_label": "Hot",
+                "last_contacted_at": "2026-06-28T15:30:00Z",
+                "status": "qualified"
+            }
+        }
+
+
+class FollowupsDueResponse(BaseModel):
+    """Response for follow-ups due."""
+    total_leads: int = Field(..., description="Total number of leads")
+    overdue_count: int = Field(..., description="Number of overdue leads")
+    due_today_count: int = Field(..., description="Number due today")
+    due_this_week_count: int = Field(..., description="Number due this week")
+    leads: List[FollowupLead] = Field(..., description="List of leads sorted by urgency")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_leads": 15,
+                "overdue_count": 5,
+                "due_today_count": 3,
+                "due_this_week_count": 7,
+                "leads": []
+            }
+        }
+
+
+class TimelineEvent(BaseModel):
+    """Timeline event for a lead."""
+    event_type: str = Field(..., description="Type of event")
+    description: str = Field(..., description="Event description")
+    timestamp: str = Field(..., description="Event timestamp")
+    actor: Optional[str] = Field(None, description="Who performed the action")
+    details: Optional[dict] = Field(None, description="Additional details")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "event_type": "interaction",
+                "description": "Email sent",
+                "timestamp": "2026-07-01T10:00:00Z",
+                "actor": "system",
+                "details": {"channel": "email"}
+            }
+        }
+
+
+class TimelineResponse(BaseModel):
+    """Response for lead timeline."""
+    lead_id: str = Field(..., description="Lead ID")
+    contact_name: str = Field(..., description="Contact name")
+    company_name: str = Field(..., description="Company name")
+    events: List[TimelineEvent] = Field(..., description="Timeline events")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "lead_id": "123e4567-e89b-12d3-a456-426614174000",
+                "contact_name": "John Doe",
+                "company_name": "Acme Corp",
+                "events": []
+            }
+        }

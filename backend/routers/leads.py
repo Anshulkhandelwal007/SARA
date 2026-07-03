@@ -10,7 +10,8 @@ from schemas.lead import (
 )
 from schemas.response import (
     StandardResponse, ImportLeadRequest, ImportLeadResponse,
-    BatchImportRequest, BatchImportResponse, ActivityLogRequest, HealthResponse
+    BatchImportRequest, BatchImportResponse, ActivityLogRequest, HealthResponse,
+    PriorityScoreResponse, FollowupsDueResponse, TimelineResponse
 )
 from services.lead_service import LeadService
 from datetime import datetime
@@ -168,6 +169,75 @@ async def decide_followup(request: FollowupDecisionRequest, db: Session = Depend
             success=True,
             data=result,
             message="Follow-up decision retrieved successfully",
+            errors=None,
+            meta={"timestamp": datetime.utcnow().isoformat()}
+        )
+    except ValueError as e:
+        return StandardResponse(
+            success=False,
+            data=None,
+            message=str(e),
+            errors=[str(e)],
+            meta={"timestamp": datetime.utcnow().isoformat()}
+        )
+
+
+@router.get("/priority/{lead_id}", response_model=StandardResponse[PriorityScoreResponse])
+async def get_priority(lead_id: str, db: Session = Depends(get_db)):
+    """Get priority score for a lead."""
+    service = LeadService(db)
+    try:
+        result = service.calculate_priority_score(lead_id)
+        return StandardResponse(
+            success=True,
+            data=result,
+            message="Priority score calculated successfully",
+            errors=None,
+            meta={"timestamp": datetime.utcnow().isoformat()}
+        )
+    except ValueError as e:
+        return StandardResponse(
+            success=False,
+            data=None,
+            message=str(e),
+            errors=[str(e)],
+            meta={"timestamp": datetime.utcnow().isoformat()}
+        )
+
+
+@router.get("/followups-due", response_model=StandardResponse[FollowupsDueResponse])
+async def get_followups_due(days_ahead: int = 7, db: Session = Depends(get_db)):
+    """Get leads with due or overdue follow-ups."""
+    service = LeadService(db)
+    try:
+        result = service.get_followups_due(days_ahead)
+        return StandardResponse(
+            success=True,
+            data=result,
+            message=f"Retrieved {result.total_leads} leads with follow-ups due",
+            errors=None,
+            meta={"timestamp": datetime.utcnow().isoformat()}
+        )
+    except Exception as e:
+        return StandardResponse(
+            success=False,
+            data=None,
+            message=f"Failed to retrieve follow-ups: {str(e)}",
+            errors=[str(e)],
+            meta={"timestamp": datetime.utcnow().isoformat()}
+        )
+
+
+@router.get("/{lead_id}/timeline", response_model=StandardResponse[TimelineResponse])
+async def get_timeline(lead_id: str, db: Session = Depends(get_db)):
+    """Get timeline of events for a lead."""
+    service = LeadService(db)
+    try:
+        result = service.get_lead_timeline(lead_id)
+        return StandardResponse(
+            success=True,
+            data=result,
+            message="Timeline retrieved successfully",
             errors=None,
             meta={"timestamp": datetime.utcnow().isoformat()}
         )

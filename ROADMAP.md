@@ -49,6 +49,25 @@ Replacing mock data with real Google Sheets integration:
 - ⚠️ Workflow testing with real Google Sheets data (pending)
 - ⚠️ Incremental import testing (pending)
 
+**Phase 2: Lead Prioritization and Follow-up Reminder Engine (In Progress - Sprint 2)**
+
+Building the first real business capability on top of the existing backend + PostgreSQL + n8n architecture:
+- ✅ Lead priority scoring logic implemented (status, recency, value, interaction, overdue factors)
+- ✅ Follow-up reminder logic implemented (overdue detection, sorting by urgency)
+- ✅ GET /leads/priority/{lead_id} endpoint (priority score with factors breakdown)
+- ✅ GET /leads/followups-due endpoint (daily follow-up summary)
+- ✅ GET /leads/{lead_id}/timeline endpoint (lead event history)
+- ✅ POST /leads/score endpoint (existing, enhanced with new logic)
+- ✅ POST /leads/recommend-action endpoint (existing, enhanced with new logic)
+- ✅ n8n workflow for daily follow-up summary created
+- ✅ Unit tests for priority scoring (hot/warm/cold lead tests)
+- ✅ Unit tests for overdue detection
+- ✅ Unit tests for follow-up ordering
+- ✅ Unit tests for timeline generation
+- ⚠️ Backend verification with new endpoints (pending)
+- ⚠️ n8n workflow testing with backend API (pending)
+- ⚠️ Documentation updates (Sprint2.md, architecture.md, blueprint.md) (pending)
+
 **What's Working:**
 - PostgreSQL is the system of record with normalized tables for companies, contacts, leads, and communication history
 - n8n is running and ready for workflow automation
@@ -63,15 +82,21 @@ Replacing mock data with real Google Sheets integration:
 - **Business logic in Backend API with validation and normalization**
 - **Standard API response wrapper across all endpoints**
 - **Unit tests for validation, normalization, idempotency, and response format**
+- **Lead priority scoring engine with explainable factors (Sprint 2)**
+- **Follow-up reminder system with overdue detection (Sprint 2)**
+- **Daily follow-up summary workflow in n8n (Sprint 2)**
+- **Unit tests for priority scoring, overdue detection, follow-up ordering, timeline (Sprint 2)**
 
 **What's Missing:**
 - Google Sheets credentials setup in n8n (requires manual OAuth2 configuration)
 - Real Google Sheets data testing
 - Incremental import verification
-- Lead scoring engine (real implementation)
-- Next-action recommendation system (real implementation)
-- AI integration layer
+- AI integration layer for lead scoring (currently rule-based)
 - Communication layer (email, WhatsApp, voice)
+- Dashboard UI for follow-up management
+- Error handling strategy
+- Logging strategy
+- CI/CD pipeline
 
 ---
 

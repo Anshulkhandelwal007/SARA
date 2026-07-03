@@ -1,0 +1,121 @@
+{
+  "name": "Daily Follow-up Summary",
+  "id": "daily-followup-summary",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily at 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://sara-backend:8000/api/v1/leads/followups-due",
+        "authentication": "none",
+        "options": {}
+      },
+      "id": "call-backend-api",
+      "name": "Call Backend API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process the API response\nconst response = $input.item.json;\n\nif (response.success && response.data) {\n  const data = response.data;\n  const summary = {\n    total_leads: data.total_leads,\n    overdue_count: data.overdue_count,\n    due_today_count: data.due_today_count,\n    due_this_week_count: data.due_this_week_count,\n    leads: data.leads.map(lead => ({\n      lead_id: lead.lead_id,\n      contact_name: lead.contact_name,\n      company_name: lead.company_name,\n      priority_score: lead.priority_score,\n      priority_label: lead.priority_label,\n      next_followup_at: lead.next_followup_at,\n      days_overdue: lead.days_overdue,\n      next_action: lead.priority_label === 'Hot' || lead.priority_label === 'Overdue' ? 'Call immediately' : lead.priority_label === 'Warm' ? 'Send email' : 'Schedule follow-up'\n    }))\n  };\n  \n  return [{ json: summary }];\n} else {\n  return [{ json: { error: 'Failed to retrieve follow-ups', details: response } }];\n}"
+      },
+      "id": "process-response",
+      "name": "Process Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate a readable summary\nconst data = $input.item.json;\n\nlet summary = `Daily Follow-up Summary\\n`;\nsummary += `========================\\n`;\nsummary += `Total Leads: ${data.total_leads}\\n`;\nsummary += `Overdue: ${data.overdue_count}\\n`;\nsummary += `Due Today: ${data.due_today_count}\\n`;\nsummary += `Due This Week: ${data.due_this_week_count}\\n\\n`;\n\nif (data.leads && data.leads.length > 0) {\n  summary += `Priority Leads:\\n`;\n  summary += `----------------\\n`;\n  \n  data.leads.forEach((lead, index) => {\n    const overdueStatus = lead.days_overdue > 0 ? `(${lead.days_overdue} days overdue)` : '';\n    summary += `${index + 1}. ${lead.contact_name} - ${lead.company_name}\\n`;\n    summary += `   Priority: ${lead.priority_label} (${lead.priority_score})\\n`;\n    summary += `   Status: ${overdueStatus}\\n`;\n    summary += `   Action: ${lead.next_action}\\n\\n`;\n  });\n} else {\n  summary += `No leads with follow-ups due.\\n`;\n}\n\nreturn [{ json: { summary: summary, raw_data: data } }];"
+      },
+      "id": "generate-summary",
+      "name": "Generate Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "txt",
+        "options": {}
+      },
+      "id": "save-summary",
+      "name": "Save Summary to File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Daily at 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Call Backend API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Backend API": {
+      "main": [
+        [
+          {
+            "node": "Process Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Response": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary": {
+      "main": [
+        [
+          {
+            "node": "Save Summary to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-07-03T08:00:00.000Z",
+  "versionId": "1"
+}
