@@ -75,6 +75,52 @@ When the backend API is Docker-integrated and n8n can reach it:
 - AI integration happens in backend, not in n8n
 - Clear separation of concerns
 
+## n8n Version Compatibility Fix (July 2026)
+
+**Issue:**
+The original workflow was incompatible with current n8n version due to incorrect node connections for the `splitInBatches` node (typeVersion 3). The Loop Branch was connected correctly, but the Done Branch was missing, causing the workflow to not execute properly.
+
+**Fix Applied:**
+1. **Process Each Lead node connections:**
+   - Loop Branch (index 0): Connected to Validate Lead Data (unchanged)
+   - Done Branch (index 1): Connected to Collect Results (added)
+
+2. **Loop continuation:**
+   - Log Import node now connects back to Process Each Lead to continue the loop
+
+**Workflow Flow:**
+```
+Start Import → Generate Mock Data → Process Each Lead
+                                          ↓
+                              ┌───────────┴───────────┐
+                              ↓                       ↓
+                        Loop Branch              Done Branch
+                              ↓                       ↓
+                    Validate Lead Data        Collect Results
+                              ↓                       ↓
+                        Is Valid?               Generate Response
+                              ↓ (if valid)
+                        Normalize Data
+                              ↓
+                        Upsert Company
+                              ↓
+                        Upsert Contact
+                              ↓
+                        Create Lead
+                              ↓
+                        Log Import
+                              ↓
+                    (back to Process Each Lead)
+```
+
+**Testing Instructions:**
+1. Import the corrected workflow from `workflows/exports/lead-import-v1.json`
+2. Open the workflow in n8n
+3. Execute the workflow manually
+4. Verify that both mock leads are processed
+5. Check PostgreSQL for created records
+6. Verify the response shows correct statistics
+
 ## Workflow Stages
 
 ### 1. Trigger (Webhook or Manual)
