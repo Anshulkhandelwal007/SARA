@@ -115,22 +115,28 @@ SARA/
 │   ├── tests/           # Unit tests
 │   ├── requirements.txt  # Python dependencies
 │   └── README.md        # Backend documentation
-├── backups/              # Database backups
 ├── database/             # SQL schemas and migrations
 │   ├── init/            # Initialization scripts
+│   ├── migrations/      # Database migration files
 │   └── schema-documentation.md  # Database reference
 ├── docs/                 # Project documentation
-│   └── architecture.md  # System design documentation
-├── knowledge-base/       # AI training data and context
-├── prompts/              # AI prompt templates
+│   ├── architecture.md  # System design documentation
+│   ├── repository_audit_report.md  # Repository audit findings
+│   ├── final_audit_report.md  # Final audit report
+│   ├── sara_blueprint_notes.md  # Blueprint companion notes
+│   └── technical_debt.md  # Technical debt tracking
 ├── workflows/            # n8n workflow exports and specs
 │   ├── exports/         # Workflow JSON exports
-│   ├── lead-import-v1.md  # Lead Import workflow docs
+│   ├── backups/         # Workflow backups
+│   ├── WORKFLOW_MANAGEMENT.md  # Workflow management guide
+│   ├── google-sheets-integration.md  # Google Sheets integration docs
+│   ├── lead-import-v1.md  # Lead Import workflow docs (deprecated)
 │   └── lead-automation-workflow.md  # Automation workflow specs
 ├── scripts/              # Utility scripts
-├── logs/                 # Application logs
+│   └── deploy-workflow.sh  # Workflow deployment script
 ├── ROADMAP.md            # Product roadmap and phases
-├── .env                  # Environment variables (not committed)
+├── SARA_BLUEPRINT.md     # Design source of truth
+├── Sprint1.md            # Sprint 1 plan
 ├── .env.example          # Environment template
 ├── .gitignore            # Git ignore rules
 ├── docker-compose.yml    # Docker orchestration
@@ -141,22 +147,23 @@ SARA/
 
 See [ROADMAP.md](ROADMAP.md) for detailed phases, milestones, and success metrics.
 
-### Current Phase: Backend API Foundation
+### Current Phase: Sprint 1 - Architecture Compliance
 - ✅ Docker stack setup
 - ✅ Database schema v2 (normalized CRM foundation)
-- ✅ Lead Import v1 workflow
 - ✅ Backend API skeleton with FastAPI
 - ✅ API endpoints for lead operations
 - ✅ Backend Docker integration
 - ✅ Backend service running in Docker
-- 🔄 n8n workflow integration with backend
+- ✅ Google Sheets integration workflow
+- ✅ Blueprint documentation
+- 🔄 Architecture compliance (Sprint 1 in progress)
 
 ### Upcoming Phases
 - Phase 2: Lead Scoring Engine
 - Phase 3: Next-Action Recommendation
-- Phase 4: AI Integration Layer
-- Phase 5: Communication Layer
-- Phase 6: Advanced Automation
+- Phase 4: Communication Layer
+- Phase 5: Sales Dashboard
+- Phase 6: AI Integration
 
 ## Development Workflow
 
@@ -165,19 +172,23 @@ See [ROADMAP.md](ROADMAP.md) for detailed phases, milestones, and success metric
 3. Export workflows to `workflows/exports/` directory
 4. Document workflow logic in `workflows/*.md`
 5. Document any database changes in `database/`
-6. Update prompts in `prompts/` as needed
-7. Test thoroughly before committing
+6. Test thoroughly before committing
 
 **Key Principle:** Keep business rules in the backend, not in n8n nodes.
 
+**Important:** See [SARA_BLUEPRINT.md](SARA_BLUEPRINT.md) for the design source of truth and [Sprint1.md](Sprint1.md) for current sprint objectives.
+
 ## Importing Workflows
 
-To import the Lead Import v1 workflow:
+To import the Google Sheets integration workflow:
 1. Open n8n at http://localhost:5678
 2. Click "Import from File" or drag-and-drop
-3. Select `workflows/exports/lead-import-v1.json`
-4. Configure PostgreSQL credentials in n8n
-5. Test with manual trigger
+3. Select `workflows/exports/lead-import-google-sheets.json`
+4. Configure Google Sheets credentials in n8n
+5. Configure PostgreSQL credentials in n8n
+6. Test with manual trigger
+
+See [workflows/WORKFLOW_MANAGEMENT.md](workflows/WORKFLOW_MANAGEMENT.md) for automated deployment.
 
 ## Troubleshooting
 
