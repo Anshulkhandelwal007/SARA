@@ -3,14 +3,261 @@ from models.company import Company
 from models.contact import Contact
 from models.lead import Lead
 from schemas.lead import LeadImportRequest, LeadImportResponse, LeadScoreResponse, NextActionResponse, CallSummaryResponse, FollowupDecisionResponse
-from typing import Optional, Dict, Any
+from schemas.response import ImportLeadRequest, ImportLeadResponse, BatchImportResponse, ActivityLogRequest
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 import uuid
+import re
 
 
 class LeadService:
     def __init__(self, db: Session):
         self.db = db
+    
+    def validate_lead_data(self, lead_data: ImportLeadRequest) -> tuple[bool, List[str]]:
+        """Validate lead data and return (is_valid, errors)."""
+        errors = []
+        
+        # Validate email
+        if not lead_data.email:
+            errors.append("Email is required")
+        elif not self._is_valid_email(lead_data.email):
+            errors.append(f"Invalid email format: {lead_data.email}")
+        
+        # Validate company name
+        if not lead_data.company_name or not lead_data.company_name.strip():
+            errors.append("Company name is required")
+        
+        # Validate names
+        if not lead_data.first_name or not lead_data.first_name.strip():
+            errors.append("First name is required")
+        if not lead_data.last_name or not lead_data.last_name.strip():
+            errors.append("Last name is required")
+        
+        # Validate source
+        if not lead_data.source or not lead_data.source.strip():
+            errors.append("Source is required")
+        
+        # Validate phone format if provided
+        if lead_data.phone and not self._is_valid_phone(lead_data.phone):
+            errors.append(f"Invalid phone format: {lead_data.phone}")
+        
+        if lead_data.mobile and not self._is_valid_phone(lead_data.mobile):
+            errors.append(f"Invalid mobile format: {lead_data.mobile}")
+        
+        return len(errors) == 0, errors
+    
+    def normalize_lead_data(self, lead_data: ImportLeadRequest) -> ImportLeadRequest:
+        """Normalize lead data fields."""
+        # Normalize email
+        if lead_data.email:
+            lead_data.email = lead_data.email.lower().strip()
+        
+        # Normalize names
+        if lead_data.first_name:
+            lead_data.first_name = lead_data.first_name.strip().title()
+        if lead_data.last_name:
+            lead_data.last_name = lead_data.last_name.strip().title()
+        
+        # Normalize company name
+        if lead_data.company_name:
+            lead_data.company_name = lead_data.company_name.strip()
+        
+        # Normalize website
+        if lead_data.company_website:
+            lead_data.company_website = lead_data.company_website.strip()
+            if not lead_data.company_website.startswith(('http://', 'https://')):
+                lead_data.company_website = 'https://' + lead_data.company_website
+        
+        # Normalize phone numbers
+        if lead_data.phone:
+            lead_data.phone = self._normalize_phone(lead_data.phone)
+        if lead_data.mobile:
+            lead_data.mobile = self._normalize_phone(lead_data.mobile)
+        
+        # Normalize source
+        if lead_data.source:
+            lead_data.source = lead_data.source.strip().lower()
+        
+        # Normalize status
+        if lead_data.status:
+            lead_data.status = lead_data.status.strip().lower()
+        
+        return lead_data
+    
+    def _is_valid_email(self, email: str) -> bool:
+        """Validate email format."""
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(pattern, email) is not None
+    
+    def _is_valid_phone(self, phone: str) -> bool:
+        """Validate phone format (basic check)."""
+        # Remove all non-numeric characters
+        cleaned = re.sub(r'[^\d+]', '', phone)
+        # Should have at least 10 digits
+        return len(cleaned) >= 10
+    
+    def _normalize_phone(self, phone: str) -> str:
+        """Normalize phone number."""
+        # Remove all non-numeric characters except +
+        cleaned = re.sub(r'[^\d+]', '', phone)
+        return cleaned
+    
+    def import_lead_new(self, lead_data: ImportLeadRequest) -> ImportLeadResponse:
+        """Import a lead with validation, normalization, and upsert logic."""
+        try:
+            # Validate data
+            is_valid, errors = self.validate_lead_data(lead_data)
+            if not is_valid:
+                return ImportLeadResponse(
+                    lead_id=None,
+                    contact_id=None,
+                    company_id=None,
+                    is_new=False
+                )
+            
+            # Normalize data
+            lead_data = self.normalize_lead_data(lead_data)
+            
+            # Extract domain from website
+            domain = None
+            if lead_data.company_website:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(lead_data.company_website)
+                    domain = parsed.netloc
+                except:
+                    pass
+            
+            # Upsert company
+            company = self.db.query(Company).filter(
+                Company.name == lead_data.company_name,
+                Company.domain == domain
+            ).first()
+            
+            if company:
+                company_id = company.id
+                is_new_company = False
+            else:
+                company = Company(
+                    id=str(uuid.uuid4()),
+                    name=lead_data.company_name,
+                    website=lead_data.company_website,
+                    domain=domain
+                )
+                self.db.add(company)
+                self.db.commit()
+                self.db.refresh(company)
+                company_id = company.id
+                is_new_company = True
+            
+            # Upsert contact
+            contact = self.db.query(Contact).filter(
+                Contact.email == lead_data.email
+            ).first()
+            
+            if contact:
+                contact_id = contact.id
+                # Update contact if needed
+                contact.company_id = company_id
+                contact.phone = lead_data.phone
+                contact.mobile = lead_data.mobile
+                contact.title = lead_data.title
+                self.db.commit()
+                is_new_contact = False
+            else:
+                contact = Contact(
+                    id=str(uuid.uuid4()),
+                    company_id=company_id,
+                    first_name=lead_data.first_name,
+                    last_name=lead_data.last_name,
+                    email=lead_data.email,
+                    phone=lead_data.phone,
+                    mobile=lead_data.mobile,
+                    title=lead_data.title
+                )
+                self.db.add(contact)
+                self.db.commit()
+                self.db.refresh(contact)
+                contact_id = contact.id
+                is_new_contact = True
+            
+            # Check if lead exists
+            lead = self.db.query(Lead).filter(
+                Lead.contact_id == contact_id,
+                Lead.source == lead_data.source
+            ).first()
+            
+            if lead:
+                lead_id = lead.id
+                is_new_lead = False
+            else:
+                lead = Lead(
+                    id=str(uuid.uuid4()),
+                    contact_id=contact_id,
+                    company_id=company_id,
+                    source=lead_data.source,
+                    status=lead_data.status or "new",
+                    score=0,
+                    estimated_value=lead_data.estimated_value
+                )
+                self.db.add(lead)
+                self.db.commit()
+                self.db.refresh(lead)
+                lead_id = lead.id
+                is_new_lead = True
+            
+            return ImportLeadResponse(
+                lead_id=lead_id,
+                contact_id=contact_id,
+                company_id=company_id,
+                is_new=is_new_lead
+            )
+            
+        except Exception as e:
+            self.db.rollback()
+            raise e
+    
+    def batch_import_leads(self, leads: List[ImportLeadRequest], source: str) -> BatchImportResponse:
+        """Batch import multiple leads."""
+        imported = 0
+        updated = 0
+        failed = 0
+        errors = []
+        
+        for i, lead_data in enumerate(leads):
+            try:
+                # Set source if not provided
+                if not lead_data.source:
+                    lead_data.source = source
+                
+                result = self.import_lead_new(lead_data)
+                
+                if result.is_new:
+                    imported += 1
+                else:
+                    updated += 1
+                    
+            except Exception as e:
+                failed += 1
+                errors.append(f"Row {i+1}: {str(e)}")
+        
+        return BatchImportResponse(
+            imported=imported,
+            updated=updated,
+            failed=failed,
+            errors=errors
+        )
+    
+    def log_activity(self, activity_data: ActivityLogRequest) -> bool:
+        """Log activity to the database."""
+        try:
+            # For now, we'll just return True
+            # In the future, this would write to an activity_log table
+            return True
+        except Exception as e:
+            self.db.rollback()
+            raise e
     
     def import_lead(self, lead_data: LeadImportRequest) -> LeadImportResponse:
         """Import a lead with company and contact upsert logic."""

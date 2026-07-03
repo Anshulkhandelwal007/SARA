@@ -6,6 +6,29 @@ SARA uses PostgreSQL 16 as its primary database. The schema is designed to suppo
 
 ## Tables
 
+### import_tracking
+
+Tracks import history for incremental data imports from various sources.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | SERIAL | Primary key |
+| source | VARCHAR(100) | Data source identifier (e.g., google_sheets, api, manual) |
+| last_import_at | TIMESTAMP | Timestamp of the last successful import |
+| imported_count | INTEGER | Number of records imported in the last run |
+| updated_count | INTEGER | Number of records updated in the last run |
+| failed_count | INTEGER | Number of records that failed in the last run |
+| created_at | TIMESTAMP | Record creation time |
+| updated_at | TIMESTAMP | Last update time |
+
+**Constraints**: UNIQUE (source)
+
+**Indexes**: source, last_import_at
+
+**Triggers**: update_import_tracking_updated_at (auto-updates updated_at on row update)
+
+---
+
 ### companies
 
 Stores organization/company information with duplicate prevention.

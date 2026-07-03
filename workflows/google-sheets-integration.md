@@ -4,6 +4,21 @@
 
 This document describes the Google Sheets integration for SARA lead import, replacing mock data with real Google Sheets data.
 
+**Sprint 1 Update**: The workflow now uses the Backend API for all lead operations. Business logic (validation, normalization, upsert) has been moved from n8n to the FastAPI backend. The workflow only orchestrates the import process.
+
+## Architecture
+
+```
+Google Sheets → n8n (Orchestration) → Backend API → PostgreSQL
+```
+
+**Key Changes (Sprint 1)**:
+- ✅ Workflow calls Backend API (`POST /batch-import`) instead of direct PostgreSQL access
+- ✅ Validation and normalization moved to Backend API
+- ✅ Business logic in Backend API service layer
+- ✅ n8n only orchestrates (reads sheets, calls API, processes response)
+- ✅ Standard API response wrapper across all endpoints
+
 ## Prerequisites
 
 ### Google Sheets Setup
@@ -55,9 +70,30 @@ This document describes the Google Sheets integration for SARA lead import, repl
    - Scopes: `https://www.googleapis.com/auth/spreadsheets.readonly`
 6. **Save and authorize** the credential
 
-## Column Mapping Layer
+## Workflow Structure
 
-### Standard Column Mapping
+### Current Workflow (Sprint 1 - Backend API)
+
+The workflow now follows the architecture principle of using the Backend API for all business operations:
+
+1. **Start Import** (Manual Trigger)
+2. **Read Google Sheet** (Google Sheets node)
+3. **Map Columns** (Code node - maps sheet columns to API format)
+4. **Prepare Batch Request** (Code node - prepares batch payload)
+5. **Call Backend API** (HTTP Request node - POST /batch-import)
+6. **Process Response** (Code node - handles API response)
+
+### Previous Workflow (Deprecated - Direct PostgreSQL Access)
+
+The previous workflow had direct PostgreSQL access nodes:
+- Upsert Company (PostgreSQL node)
+- Upsert Contact (PostgreSQL node)
+- Upsert Lead (PostgreSQL node)
+- Log Import (PostgreSQL node)
+
+**This has been moved to the Backend API** to achieve architecture compliance.
+
+## Column Mapping Layer
 
 The column mapping layer allows flexible schema mapping between Google Sheets and the CRM database.
 

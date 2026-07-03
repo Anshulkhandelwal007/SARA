@@ -24,7 +24,9 @@ SARA is a layered sales automation system with clear separation of concerns:
 ┌─────────────────────────────────────────────────────────────────┐
 │                      n8n (Orchestration)                       │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Trigger → Validate → Call API → Execute → Log          │  │
+│  │  Trigger → Validate → Call Backend API → Execute → Log  │  │
+│  │  - No direct database access (Sprint 1)                  │  │
+│  │  - Business logic in Backend API (Sprint 1)              │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └───────────────────────────┬─────────────────────────────────────┘
                             │
@@ -32,7 +34,13 @@ SARA is a layered sales automation system with clear separation of concerns:
 ┌─────────────────────────────────────────────────────────────────┐
 │                  FastAPI Backend (Business Logic)                │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Lead Import → Scoring → Recommendations → Decisions      │  │
+│  │  POST /import-lead (validation, normalization)           │  │
+│  │  POST /batch-import (batch processing)                    │  │
+│  │  POST /score-lead (lead scoring)                          │  │
+│  │  POST /next-action (recommendations)                      │  │
+│  │  POST /activity-log (logging)                              │  │
+│  │  GET /health (health check)                                │  │
+│  │  Standard response wrapper (Sprint 1)                      │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └───────────────────────────┬─────────────────────────────────────┘
                             │

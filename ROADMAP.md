@@ -26,7 +26,7 @@ Backend API layer is complete and running in Docker:
 - ✅ Health endpoint working with PostgreSQL connectivity
 - ✅ API contract documented in OpenAPI/Swagger
 
-**Phase 1.5: Real Data Integration (In Progress)**
+**Phase 1.5: Real Data Integration (Completed)**
 
 Replacing mock data with real Google Sheets integration:
 - ✅ Google Sheets integration documentation created
@@ -40,6 +40,11 @@ Replacing mock data with real Google Sheets integration:
 - ✅ Activity logging implemented
 - ✅ Import tracking table created in PostgreSQL
 - ✅ Mock data workflow archived
+- ✅ **Architecture compliance achieved (Sprint 1)**
+- ✅ **Google Sheets workflow migrated to Backend API**
+- ✅ **Business logic moved from n8n to backend**
+- ✅ **Standard API response wrapper implemented**
+- ✅ **Unit tests added for validation, normalization, idempotency**
 - ⚠️ Google Sheets credentials setup in n8n (manual step required)
 - ⚠️ Workflow testing with real Google Sheets data (pending)
 - ⚠️ Incremental import testing (pending)
@@ -48,18 +53,21 @@ Replacing mock data with real Google Sheets integration:
 - PostgreSQL is the system of record with normalized tables for companies, contacts, leads, and communication history
 - n8n is running and ready for workflow automation
 - Backend API is running in Docker with health endpoint verified
-- Google Sheets integration workflow is ready for deployment
+- Google Sheets integration workflow uses Backend API for all operations (Sprint 1)
 - Column mapping layer supports flexible schema mapping
 - Database-level duplicate prevention with ON CONFLICT clauses
 - Import tracking table enables incremental imports
 - Automated workflow deployment script
 - Documentation covers architecture, workflow management, and Google Sheets integration
+- **Architecture compliance achieved: n8n calls Backend API, no direct PostgreSQL access**
+- **Business logic in Backend API with validation and normalization**
+- **Standard API response wrapper across all endpoints**
+- **Unit tests for validation, normalization, idempotency, and response format**
 
 **What's Missing:**
 - Google Sheets credentials setup in n8n (requires manual OAuth2 configuration)
 - Real Google Sheets data testing
 - Incremental import verification
-- n8n workflows calling backend API instead of direct PostgreSQL access (future migration)
 - Lead scoring engine (real implementation)
 - Next-action recommendation system (real implementation)
 - AI integration layer

@@ -448,12 +448,18 @@ Lead → Contact → Opportunity → Quotation → Order → Invoice → Payment
 - Orchestrates communication workflows (email, WhatsApp)
 - Schedules follow-ups and reminders
 - Manages process flows between systems
+- **Calls Backend API for all business operations** (Sprint 1)
+- **No direct database access** (Sprint 1)
 
 #### FastAPI Backend (Business Logic Layer)
 - Exposes REST API for all operations
 - Implements business rules and validation
 - Handles authentication and authorization
 - Provides consistent data access layer
+- **Lead import with validation and normalization** (Sprint 1)
+- **Batch import endpoint** (Sprint 1)
+- **Activity logging endpoint** (Sprint 1)
+- **Standard API response wrapper** (Sprint 1)
 
 #### Google Sheets (Import/Export Interface Only)
 - Used for bulk data import (leads, contacts)
