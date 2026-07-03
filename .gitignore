@@ -1,0 +1,45 @@
+# Environment variables
+.env
+
+# Docker volumes and data
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Database backups (keep structure, ignore actual backups)
+backups/*.sql
+backups/*.dump
+!backups/.gitkeep
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node modules (if any)
+node_modules/
+
+# Python (if any)
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+.venv
+
+# Knowledge base (may contain sensitive data)
+knowledge-base/*.pdf
+knowledge-base/*.docx
+knowledge-base/*.doc
+!knowledge-base/.gitkeep

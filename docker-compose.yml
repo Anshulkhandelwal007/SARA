@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sara-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sara-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sara-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: ${PGADMIN_CONFIG_SERVER_MODE}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sara-network
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: sara-n8n
+    restart: unless-stopped
+    environment:
+      N8N_PORT: ${N8N_PORT}
+      N8N_HOST: ${N8N_HOST}
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
+      N8N_TIMEZONE: ${N8N_TIMEZONE}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    ports:
+      - "${N8N_PORT}:5678"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sara-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sara-backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: ${BACKEND_APP_NAME:-SARA Backend API}
+      APP_VERSION: ${BACKEND_APP_VERSION:-1.0.0}
+      DEBUG: ${BACKEND_DEBUG:-false}
+      HOST: 0.0.0.0
+      PORT: 8000
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB}
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      CORS_ORIGINS: '["http://localhost:5678","http://localhost:5050"]'
+      TZ: ${TZ}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sara-network
+
+volumes:
+  postgres_data:
+    name: sara_postgres_data
+  pgadmin_data:
+    name: sara_pgadmin_data
+  n8n_data:
+    name: sara_n8n_data
+
+networks:
+  sara-network:
+    name: sara_network
+    driver: bridge
