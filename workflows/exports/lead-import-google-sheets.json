@@ -1,0 +1,338 @@
+{
+  "name": "Lead Import - Google Sheets",
+  "id": "lead-import-google-sheets",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Start Import",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "sheetId": {
+          "__rl": true,
+          "value": "",
+          "mode": "url",
+          "name": "Google Sheets"
+        },
+        "range": "A:Z"
+      },
+      "id": "google-sheets-reader",
+      "name": "Read Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Column mapping configuration\nconst mapping = {\n  company_name: \"Company Name\",\n  company_website: \"Company Website\",\n  first_name: \"First Name\",\n  last_name: \"Last Name\",\n  email: \"Email\",\n  phone: \"Phone\",\n  mobile: \"Mobile\",\n  title: \"Title\",\n  source: \"Source\",\n  estimated_value: \"Estimated Value\",\n  last_modified: \"Last Modified\",\n  status: \"Status\"\n};\n\n// Apply mapping to each row\nconst mappedRows = [];\nfor (const item of $input.all()) {\n  const row = item.json;\n  const mapped = {};\n  \n  for (const [key, sheetColumn] of Object.entries(mapping)) {\n    mapped[key] = row[sheetColumn] || null;\n  }\n  \n  // Set default source if not provided\n  if (!mapped.source) {\n    mapped.source = \"google_sheets\";\n  }\n  \n  mappedRows.push({ json: mapped });\n}\n\nreturn mappedRows;"
+      },
+      "id": "column-mapper",
+      "name": "Map Columns",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Process Each Lead",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\n\nconst errors = [];\n\nif (!lead.company_name || lead.company_name.trim() === '') {\n  errors.push('company_name is required');\n}\nif (!lead.first_name || lead.first_name.trim() === '') {\n  errors.push('first_name is required');\n}\nif (!lead.last_name || lead.last_name.trim() === '') {\n  errors.push('last_name is required');\n}\nif (!lead.email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(lead.email)) {\n  errors.push('valid email is required');\n}\nif (!lead.phone && !lead.mobile) {\n  errors.push('at least one of phone or mobile is required');\n}\n\nif (errors.length > 0) {\n  return [{\n    json: {\n      valid: false,\n      errors: errors,\n      lead: lead\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    valid: true,\n    lead: lead\n  }\n}];"
+      },
+      "id": "validate-data",
+      "name": "Validate Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-valid",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json.lead;\n\n// Normalize data\nconst normalized = {\n  company_name: lead.company_name.trim(),\n  company_website: lead.company_website ? lead.company_website.trim() : null,\n  first_name: lead.first_name.trim().charAt(0).toUpperCase() + lead.first_name.trim().slice(1).toLowerCase(),\n  last_name: lead.last_name.trim().charAt(0).toUpperCase() + lead.last_name.trim().slice(1).toLowerCase(),\n  email: lead.email.trim().toLowerCase(),\n  phone: lead.phone ? lead.phone.trim() : null,\n  mobile: lead.mobile ? lead.mobile.trim() : null,\n  title: lead.title ? lead.title.trim() : null,\n  source: lead.source,\n  estimated_value: lead.estimated_value || 0,\n  status: lead.status || 'new'\n};\n\n// Extract domain from website\nif (normalized.company_website) {\n  try {\n    const url = new URL(normalized.company_website);\n    normalized.domain = url.hostname;\n  } catch (e) {\n    normalized.domain = null;\n  }\n} else {\n  normalized.domain = null;\n}\n\nreturn [{\n  json: normalized\n}];"
+      },
+      "id": "normalize-data",
+      "name": "Normalize Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO companies (name, website, domain, industry, size, location, country)\nVALUES ($1, $2, $3, $4, $5, $6, $7)\nON CONFLICT (name, domain) DO UPDATE SET\n  website = EXCLUDED.website,\n  updated_at = CURRENT_TIMESTAMP\nRETURNING id;",
+        "options": {}
+      },
+      "id": "upsert-company",
+      "name": "Upsert Company",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1780, 200],
+      "credentials": {
+        "postgres": {
+          "id": "sara-postgres",
+          "name": "SARA PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO contacts (company_id, first_name, last_name, email, phone, mobile, title, department)\nVALUES ($1, $2, $3, $4, $5, $6, $7, $8)\nON CONFLICT (email) DO UPDATE SET\n  company_id = EXCLUDED.company_id,\n  phone = EXCLUDED.phone,\n  mobile = EXCLUDED.mobile,\n  title = EXCLUDED.title,\n  updated_at = CURRENT_TIMESTAMP\nRETURNING id;",
+        "options": {}
+      },
+      "id": "upsert-contact",
+      "name": "Upsert Contact",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [2000, 200],
+      "credentials": {
+        "postgres": {
+          "id": "sara-postgres",
+          "name": "SARA PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leads (contact_id, company_id, source, status, score, estimated_value, custom_fields)\nVALUES ($1, $2, $3, $4, 0, $5, $6)\nON CONFLICT (contact_id, company_id) DO UPDATE SET\n  status = EXCLUDED.status,\n  estimated_value = EXCLUDED.estimated_value,\n  updated_at = CURRENT_TIMESTAMP\nRETURNING id;",
+        "options": {}
+      },
+      "id": "create-lead",
+      "name": "Upsert Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [2220, 200],
+      "credentials": {
+        "postgres": {
+          "id": "sara-postgres",
+          "name": "SARA PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO activity_log (entity_type, entity_id, action, actor, details)\nVALUES ('lead', $1, 'imported', 'Google Sheets Import', $2);",
+        "options": {}
+      },
+      "id": "log-activity",
+      "name": "Log Import",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [2440, 200],
+      "credentials": {
+        "postgres": {
+          "id": "sara-postgres",
+          "name": "SARA PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "append"
+      },
+      "id": "merge-results",
+      "name": "Collect Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst processed = items.length;\nconst created = items.filter(i => i.json.lead_id).length;\nconst updated = items.filter(i => i.json.lead_id && i.json.updated).length;\nconst failed = items.filter(i => i.json.error).length;\n\nreturn [{\n  json: {\n    success: true,\n    processed: processed,\n    created: created,\n    updated: updated,\n    failed: failed,\n    source: 'google_sheets',\n    leads: items.map(i => ({\n      lead_id: i.json.lead_id || null,\n      contact_id: i.json.contact_id || null,\n      company_id: i.json.company_id || null,\n      email: i.json.email || null,\n      status: i.json.lead_id ? 'imported' : 'error'\n    }))\n  }\n}];"
+      },
+      "id": "generate-response",
+      "name": "Generate Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 200]
+    }
+  ],
+  "connections": {
+    "Start Import": {
+      "main": [
+        [
+          {
+            "node": "Read Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Map Columns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Columns": {
+      "main": [
+        [
+          {
+            "node": "Process Each Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Each Lead": {
+      "main": [
+        [
+          {
+            "node": "Validate Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Normalize Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Data": {
+      "main": [
+        [
+          {
+            "node": "Upsert Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Company": {
+      "main": [
+        [
+          {
+            "node": "Upsert Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Contact": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Lead": {
+      "main": [
+        [
+          {
+            "node": "Log Import",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Import": {
+      "main": [
+        [
+          {
+            "node": "Process Each Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Results": {
+      "main": [
+        [
+          {
+            "node": "Generate Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-03T11:00:00.000Z",
+  "versionId": "1"
+}
