@@ -263,3 +263,78 @@ class TimelineResponse(BaseModel):
                 "events": []
             }
         }
+
+
+class DashboardSummary(BaseModel):
+    """Dashboard summary statistics."""
+    total_leads: int = Field(..., description="Total number of leads")
+    hot_leads: int = Field(..., description="Number of hot leads")
+    warm_leads: int = Field(..., description="Number of warm leads")
+    cold_leads: int = Field(..., description="Number of cold leads")
+    overdue_leads: int = Field(..., description="Number of overdue leads")
+    due_today: int = Field(..., description="Number due today")
+    due_this_week: int = Field(..., description="Number due this week")
+    total_value: float = Field(..., description="Total estimated value of all leads")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_leads": 100,
+                "hot_leads": 25,
+                "warm_leads": 40,
+                "cold_leads": 35,
+                "overdue_leads": 10,
+                "due_today": 5,
+                "due_this_week": 20,
+                "total_value": 2500000.0
+            }
+        }
+
+
+class RecentActivity(BaseModel):
+    """Recent activity item."""
+    lead_id: str = Field(..., description="Lead ID")
+    contact_name: str = Field(..., description="Contact name")
+    company_name: str = Field(..., description="Company name")
+    activity_type: str = Field(..., description="Type of activity")
+    activity_description: str = Field(..., description="Activity description")
+    timestamp: str = Field(..., description="Activity timestamp")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "lead_id": "123e4567-e89b-12d3-a456-426614174000",
+                "contact_name": "John Doe",
+                "company_name": "Acme Corp",
+                "activity_type": "status_change",
+                "activity_description": "Status changed to qualified",
+                "timestamp": "2026-07-03T10:00:00Z"
+            }
+        }
+
+
+class DashboardResponse(BaseModel):
+    """Dashboard data response."""
+    summary: DashboardSummary = Field(..., description="Summary statistics")
+    recent_activities: List[RecentActivity] = Field(..., description="Recent activities")
+    hot_leads: List[FollowupLead] = Field(..., description="Hot leads")
+    overdue_leads: List[FollowupLead] = Field(..., description="Overdue leads")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "summary": {
+                    "total_leads": 100,
+                    "hot_leads": 25,
+                    "warm_leads": 40,
+                    "cold_leads": 35,
+                    "overdue_leads": 10,
+                    "due_today": 5,
+                    "due_this_week": 20,
+                    "total_value": 2500000.0
+                },
+                "recent_activities": [],
+                "hot_leads": [],
+                "overdue_leads": []
+            }
+        }

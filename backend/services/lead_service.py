@@ -3,7 +3,7 @@ from models.company import Company
 from models.contact import Contact
 from models.lead import Lead
 from schemas.lead import LeadImportRequest, LeadImportResponse, LeadScoreResponse, NextActionResponse, CallSummaryResponse, FollowupDecisionResponse
-from schemas.response import ImportLeadRequest, ImportLeadResponse, BatchImportResponse, ActivityLogRequest, PriorityScoreResponse, FollowupLead, FollowupsDueResponse, TimelineEvent, TimelineResponse
+from schemas.response import ImportLeadRequest, ImportLeadResponse, BatchImportResponse, ActivityLogRequest, PriorityScoreResponse, FollowupLead, FollowupsDueResponse, TimelineEvent, TimelineResponse, DashboardSummary, RecentActivity, DashboardResponse
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import uuid
@@ -732,4 +732,162 @@ class LeadService:
             contact_name=f"{contact.first_name} {contact.last_name}" if contact else "Unknown",
             company_name=company.name if company else "Unknown",
             events=events
+        )
+    
+    def get_dashboard_summary(self) -> DashboardSummary:
+        """Get dashboard summary statistics."""
+        now = datetime.utcnow()
+        
+        # Total leads
+        total_leads = self.db.query(Lead).count()
+        
+        # Count by priority label (using scoring logic)
+        all_leads = self.db.query(Lead).all()
+        hot_count = 0
+        warm_count = 0
+        cold_count = 0
+        overdue_count = 0
+        due_today_count = 0
+        due_this_week_count = 0
+        total_value = 0.0
+        
+        for lead in all_leads:
+            # Calculate priority
+            priority = self.calculate_priority_score(lead.id)
+            
+            if priority.label == "Hot":
+                hot_count += 1
+            elif priority.label == "Warm":
+                warm_count += 1
+            elif priority.label == "Cold":
+                cold_count += 1
+            elif priority.label == "Overdue":
+                overdue_count += 1
+            
+            # Count due today
+            if lead.next_followup_at:
+                days_diff = (lead.next_followup_at.date() - now.date()).days
+                if days_diff == 0:
+                    due_today_count += 1
+                if 0 <= days_diff <= 7:
+                    due_this_week_count += 1
+            
+            # Sum estimated value
+            if lead.estimated_value:
+                total_value += float(lead.estimated_value)
+        
+        return DashboardSummary(
+            total_leads=total_leads,
+            hot_leads=hot_count,
+            warm_leads=warm_count,
+            cold_leads=cold_count,
+            overdue_leads=overdue_count,
+            due_today=due_today_count,
+            due_this_week=due_this_week_count,
+            total_value=total_value
+        )
+    
+    def get_recent_activities(self, limit: int = 10) -> List[RecentActivity]:
+        """Get recent activities across all leads."""
+        # For now, return activities based on lead creation and updates
+        # In a full implementation, this would query an activity_log table
+        leads = self.db.query(Lead).order_by(Lead.updated_at.desc()).limit(limit).all()
+        
+        activities = []
+        for lead in leads:
+            contact = self.db.query(Contact).filter(Contact.id == lead.contact_id).first()
+            company = self.db.query(Company).filter(Company.id == lead.company_id).first() if lead.company_id else None
+            
+            activity = RecentActivity(
+                lead_id=lead.id,
+                contact_name=f"{contact.first_name} {contact.last_name}" if contact else "Unknown",
+                company_name=company.name if company else "Unknown",
+                activity_type="status_update",
+                activity_description=f"Lead status: {lead.status}",
+                timestamp=lead.updated_at.isoformat() if lead.updated_at else None
+            )
+            activities.append(activity)
+        
+        return activities
+    
+    def get_hot_leads(self, limit: int = 10) -> List[FollowupLead]:
+        """Get hot leads sorted by priority."""
+        all_leads = self.db.query(Lead).all()
+        
+        hot_leads_data = []
+        for lead in all_leads:
+            priority = self.calculate_priority_score(lead.id)
+            if priority.label == "Hot":
+                contact = self.db.query(Contact).filter(Contact.id == lead.contact_id).first()
+                company = self.db.query(Company).filter(Company.id == lead.company_id).first() if lead.company_id else None
+                
+                days_overdue = 0
+                if lead.next_followup_at:
+                    days_overdue = (datetime.utcnow() - lead.next_followup_at).days
+                
+                hot_lead = FollowupLead(
+                    lead_id=lead.id,
+                    contact_name=f"{contact.first_name} {contact.last_name}" if contact else "Unknown",
+                    company_name=company.name if company else "Unknown",
+                    next_followup_at=lead.next_followup_at.isoformat() if lead.next_followup_at else None,
+                    days_overdue=days_overdue,
+                    priority_score=priority.score,
+                    priority_label=priority.label,
+                    last_contacted_at=lead.last_contacted_at.isoformat() if lead.last_contacted_at else None,
+                    status=lead.status
+                )
+                hot_leads_data.append(hot_lead)
+        
+        # Sort by priority score descending
+        hot_leads_data.sort(key=lambda x: x.priority_score, reverse=True)
+        
+        return hot_leads_data[:limit]
+    
+    def get_overdue_leads(self, limit: int = 10) -> List[FollowupLead]:
+        """Get overdue leads sorted by days overdue."""
+        now = datetime.utcnow()
+        
+        leads = self.db.query(Lead).filter(
+            Lead.next_followup_at.isnot(None),
+            Lead.next_followup_at < now
+        ).order_by(Lead.next_followup_at.asc()).all()
+        
+        overdue_leads_data = []
+        for lead in leads:
+            contact = self.db.query(Contact).filter(Contact.id == lead.contact_id).first()
+            company = self.db.query(Company).filter(Company.id == lead.company_id).first() if lead.company_id else None
+            
+            days_overdue = (now - lead.next_followup_at).days
+            priority = self.calculate_priority_score(lead.id)
+            
+            overdue_lead = FollowupLead(
+                lead_id=lead.id,
+                contact_name=f"{contact.first_name} {contact.last_name}" if contact else "Unknown",
+                company_name=company.name if company else "Unknown",
+                next_followup_at=lead.next_followup_at.isoformat() if lead.next_followup_at else None,
+                days_overdue=days_overdue,
+                priority_score=priority.score,
+                priority_label=priority.label,
+                last_contacted_at=lead.last_contacted_at.isoformat() if lead.last_contacted_at else None,
+                status=lead.status
+            )
+            overdue_leads_data.append(overdue_lead)
+        
+        # Sort by days overdue descending
+        overdue_leads_data.sort(key=lambda x: x.days_overdue, reverse=True)
+        
+        return overdue_leads_data[:limit]
+    
+    def get_dashboard_data(self) -> DashboardResponse:
+        """Get complete dashboard data."""
+        summary = self.get_dashboard_summary()
+        recent_activities = self.get_recent_activities(limit=10)
+        hot_leads = self.get_hot_leads(limit=10)
+        overdue_leads = self.get_overdue_leads(limit=10)
+        
+        return DashboardResponse(
+            summary=summary,
+            recent_activities=recent_activities,
+            hot_leads=hot_leads,
+            overdue_leads=overdue_leads
         )

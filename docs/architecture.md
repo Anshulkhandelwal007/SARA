@@ -43,6 +43,7 @@ SARA is a layered sales automation system with clear separation of concerns:
 │  │  GET /leads/priority/{id} (priority scoring) (Sprint 2)   │  │
 │  │  GET /leads/followups-due (daily summary) (Sprint 2)      │  │
 │  │  GET /leads/{id}/timeline (lead history) (Sprint 2)        │  │
+│  │  GET /leads/dashboard/summary (dashboard data) (Sprint 3)  │  │
 │  │  Standard response wrapper (Sprint 1)                      │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └───────────────────────────┬─────────────────────────────────────┘

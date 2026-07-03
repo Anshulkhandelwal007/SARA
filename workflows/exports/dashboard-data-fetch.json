@@ -1,0 +1,69 @@
+{
+  "name": "Dashboard Data Fetch",
+  "id": "dashboard-data-fetch",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://sara-backend:8000/api/v1/leads/dashboard/summary",
+        "method": "GET",
+        "options": {}
+      },
+      "id": "fetch-dashboard",
+      "name": "Fetch Dashboard Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.item.json;\n\nif (response.success && response.data) {\n  return [{\n    json: {\n      success: true,\n      summary: response.data.summary,\n      recent_activities: response.data.recent_activities,\n      hot_leads: response.data.hot_leads,\n      overdue_leads: response.data.overdue_leads,\n      message: response.message\n    }\n  }];\n} else {\n  return [{\n    json: {\n      success: false,\n      error: response.message || 'Failed to fetch dashboard data'\n    }\n  }];\n}"
+      },
+      "id": "process-response",
+      "name": "Process Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Fetch Dashboard Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Dashboard Data": {
+      "main": [
+        [
+          {
+            "node": "Process Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-03T12:00:00.000Z",
+  "versionId": "1"
+}

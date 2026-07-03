@@ -11,7 +11,7 @@ from schemas.lead import (
 from schemas.response import (
     StandardResponse, ImportLeadRequest, ImportLeadResponse,
     BatchImportRequest, BatchImportResponse, ActivityLogRequest, HealthResponse,
-    PriorityScoreResponse, FollowupsDueResponse, TimelineResponse
+    PriorityScoreResponse, FollowupsDueResponse, TimelineResponse, DashboardResponse
 )
 from services.lead_service import LeadService
 from datetime import datetime
@@ -246,6 +246,29 @@ async def get_timeline(lead_id: str, db: Session = Depends(get_db)):
             success=False,
             data=None,
             message=str(e),
+            errors=[str(e)],
+            meta={"timestamp": datetime.utcnow().isoformat()}
+        )
+
+
+@router.get("/dashboard/summary", response_model=StandardResponse[DashboardResponse])
+async def get_dashboard(db: Session = Depends(get_db)):
+    """Get dashboard data with summary, recent activities, hot leads, and overdue leads."""
+    service = LeadService(db)
+    try:
+        result = service.get_dashboard_data()
+        return StandardResponse(
+            success=True,
+            data=result,
+            message="Dashboard data retrieved successfully",
+            errors=None,
+            meta={"timestamp": datetime.utcnow().isoformat()}
+        )
+    except Exception as e:
+        return StandardResponse(
+            success=False,
+            data=None,
+            message=f"Failed to retrieve dashboard data: {str(e)}",
             errors=[str(e)],
             meta={"timestamp": datetime.utcnow().isoformat()}
         )

@@ -49,7 +49,7 @@ Replacing mock data with real Google Sheets integration:
 - ⚠️ Workflow testing with real Google Sheets data (pending)
 - ⚠️ Incremental import testing (pending)
 
-**Phase 2: Lead Prioritization and Follow-up Reminder Engine (In Progress - Sprint 2)**
+**Phase 2: Lead Prioritization and Follow-up Reminder Engine (Completed - Sprint 2)**
 
 Building the first real business capability on top of the existing backend + PostgreSQL + n8n architecture:
 - ✅ Lead priority scoring logic implemented (status, recency, value, interaction, overdue factors)
@@ -64,9 +64,40 @@ Building the first real business capability on top of the existing backend + Pos
 - ✅ Unit tests for overdue detection
 - ✅ Unit tests for follow-up ordering
 - ✅ Unit tests for timeline generation
-- ⚠️ Backend verification with new endpoints (pending)
-- ⚠️ n8n workflow testing with backend API (pending)
-- ⚠️ Documentation updates (Sprint2.md, architecture.md, blueprint.md) (pending)
+- ✅ Backend verification with new endpoints
+- ✅ n8n workflow testing with backend API
+- ✅ Documentation updates (Sprint2.md, architecture.md, blueprint.md)
+
+**Phase 2.5: Google Workspace Integration (Completed)**
+
+Setting up Google OAuth and Google Workspace initialization:
+- ✅ Google OAuth setup guide created
+- ✅ Google Workspace initialization workflow created (idempotent)
+- ✅ OAuth redirect URI configuration fixed (N8N_EDITOR_BASE_URL, WEBHOOK_URL)
+- ✅ Google Workspace initialization guide created
+- ✅ OAuth checklist created
+- ✅ Lead Import workflow updated with Sprint 2 column mapping
+- ⚠️ User must run Google Workspace Initialization workflow in n8n
+- ⚠️ User must configure Lead Import workflow with actual spreadsheet ID
+- ⚠️ User must add sample data to Google Sheets
+- ⚠️ User must test end-to-end import
+
+**Phase 3: Lead Intelligence + Follow-up Operations (Completed - Sprint 3)**
+
+Transforming SARA from lead import system to operational sales intelligence system:
+- ✅ Dashboard data endpoints implemented (GET /leads/dashboard/summary)
+- ✅ Dashboard summary statistics (total, hot, warm, cold, overdue, due today, due this week, total value)
+- ✅ Recent activities endpoint
+- ✅ Hot leads retrieval (sorted by priority)
+- ✅ Overdue leads retrieval (sorted by days overdue)
+- ✅ Dashboard response schemas added
+- ✅ n8n Dashboard Data Fetch workflow created
+- ✅ n8n Daily Call List workflow created
+- ✅ n8n Daily Follow-up Summary workflow verified
+- ✅ Sprint3.md documentation created
+- ✅ ROADMAP.md updated
+- ⏳ Unit tests for dashboard endpoints (pending)
+- ⏳ Repository commit and push (pending)
 
 **What's Working:**
 - PostgreSQL is the system of record with normalized tables for companies, contacts, leads, and communication history
@@ -86,6 +117,12 @@ Building the first real business capability on top of the existing backend + Pos
 - **Follow-up reminder system with overdue detection (Sprint 2)**
 - **Daily follow-up summary workflow in n8n (Sprint 2)**
 - **Unit tests for priority scoring, overdue detection, follow-up ordering, timeline (Sprint 2)**
+- **Google OAuth configuration fixed (Sprint 2.5)**
+- **Google Workspace initialization workflow (Sprint 2.5)**
+- **Dashboard data endpoints with summary statistics (Sprint 3)**
+- **Recent activities, hot leads, overdue leads retrieval (Sprint 3)**
+- **n8n Dashboard Data Fetch workflow (Sprint 3)**
+- **n8n Daily Call List workflow (Sprint 3)**
 
 **What's Missing:**
 - Google Sheets credentials setup in n8n (requires manual OAuth2 configuration)

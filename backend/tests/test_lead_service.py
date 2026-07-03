@@ -783,3 +783,97 @@ class TestTimeline:
         status_event = next((e for e in timeline.events if e.event_type == "status_change"), None)
         assert status_event is not None
         assert "contacted" in status_event.description
+    
+    def test_get_dashboard_summary(self, db_session):
+        """Test dashboard summary statistics."""
+        service = LeadService(db_session)
+        
+        # Create test leads
+        lead1 = self._create_test_lead(db_session, status="qualified", estimated_value=100000)
+        lead2 = self._create_test_lead(db_session, status="new", estimated_value=50000)
+        lead3 = self._create_test_lead(db_session, status="engaged", estimated_value=25000)
+        
+        summary = service.get_dashboard_summary()
+        
+        # Verify summary statistics
+        assert summary.total_leads >= 3
+        assert summary.total_value >= 175000
+        assert isinstance(summary.hot_leads, int)
+        assert isinstance(summary.warm_leads, int)
+        assert isinstance(summary.cold_leads, int)
+    
+    def test_get_recent_activities(self, db_session):
+        """Test recent activities retrieval."""
+        service = LeadService(db_session)
+        
+        # Create test lead
+        lead = self._create_test_lead(db_session)
+        
+        activities = service.get_recent_activities(limit=10)
+        
+        # Verify activities returned
+        assert len(activities) > 0
+        assert all(hasattr(a, 'lead_id') for a in activities)
+        assert all(hasattr(a, 'contact_name') for a in activities)
+        assert all(hasattr(a, 'activity_type') for a in activities)
+    
+    def test_get_hot_leads(self, db_session):
+        """Test hot leads retrieval."""
+        service = LeadService(db_session)
+        
+        # Create test lead with high value
+        lead = self._create_test_lead(db_session, status="qualified", estimated_value=100000)
+        
+        hot_leads = service.get_hot_leads(limit=10)
+        
+        # Verify hot leads returned
+        assert isinstance(hot_leads, list)
+        # If any hot leads exist, verify structure
+        if hot_leads:
+            assert all(hasattr(h, 'lead_id') for h in hot_leads)
+            assert all(hasattr(h, 'priority_score') for h in hot_leads)
+            assert all(hasattr(h, 'priority_label') for h in hot_leads)
+    
+    def test_get_overdue_leads(self, db_session):
+        """Test overdue leads retrieval."""
+        service = LeadService(db_session)
+        
+        # Create test lead with overdue follow-up
+        lead = self._create_test_lead(db_session)
+        lead.next_followup_at = datetime.utcnow() - timedelta(days=2)
+        db_session.commit()
+        
+        overdue_leads = service.get_overdue_leads(limit=10)
+        
+        # Verify overdue leads returned
+        assert isinstance(overdue_leads, list)
+        # If any overdue leads exist, verify structure
+        if overdue_leads:
+            assert all(hasattr(o, 'lead_id') for o in overdue_leads)
+            assert all(hasattr(o, 'days_overdue') for o in overdue_leads)
+            assert all(o.days_overdue > 0 for o in overdue_leads)
+    
+    def test_get_dashboard_data(self, db_session):
+        """Test complete dashboard data retrieval."""
+        service = LeadService(db_session)
+        
+        # Create test leads
+        lead1 = self._create_test_lead(db_session, status="qualified", estimated_value=100000)
+        lead2 = self._create_test_lead(db_session, status="new", estimated_value=50000)
+        
+        dashboard = service.get_dashboard_data()
+        
+        # Verify dashboard structure
+        assert hasattr(dashboard, 'summary')
+        assert hasattr(dashboard, 'recent_activities')
+        assert hasattr(dashboard, 'hot_leads')
+        assert hasattr(dashboard, 'overdue_leads')
+        
+        # Verify summary
+        assert dashboard.summary.total_leads >= 2
+        assert dashboard.summary.total_value >= 150000
+        
+        # Verify lists
+        assert isinstance(dashboard.recent_activities, list)
+        assert isinstance(dashboard.hot_leads, list)
+        assert isinstance(dashboard.overdue_leads, list)
